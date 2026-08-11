@@ -1,4 +1,4 @@
-rootProject.name = 'chatapp'
 plugins {
     id 'org.gradle.toolchains.foojay-resolver-conventions' version '0.8.0'
 }
+rootProject.name = 'chatapp'
