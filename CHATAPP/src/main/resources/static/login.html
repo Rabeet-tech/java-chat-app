@@ -3,148 +3,124 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
     <title>Login - Chat App</title>
-
     <style>
         * {
             box-sizing: border-box;
         }
-
         body {
             margin: 0;
             min-height: 100vh;
-
             display: flex;
             justify-content: center;
             align-items: center;
-
             font-family: Arial, sans-serif;
             background-color: #f4f4f4;
         }
-
         .card {
             width: 90%;
             max-width: 400px;
-
             padding: 30px;
-
             background-color: white;
             border-radius: 12px;
-
             box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
         }
-
         h1 {
             text-align: center;
             margin-top: 0;
             margin-bottom: 25px;
-
             color: #333;
         }
-
         label {
             display: block;
-
             margin-bottom: 6px;
-
             font-weight: bold;
             color: #333;
         }
-
         input {
             width: 100%;
-
             padding: 12px;
             margin-bottom: 15px;
-
             border: 1px solid #ccc;
             border-radius: 6px;
-
             font-size: 16px;
         }
-
         input:focus {
             outline: none;
             border-color: #2563eb;
         }
-
         .error {
             min-height: 20px;
-
             margin-top: -8px;
             margin-bottom: 10px;
-
             color: #dc2626;
             font-size: 14px;
         }
-
         button {
             width: 100%;
-
             padding: 12px;
-
             border: none;
             border-radius: 6px;
-
             background-color: #2563eb;
             color: white;
-
             font-size: 16px;
-
             cursor: pointer;
         }
-
         button:hover {
             background-color: #1d4ed8;
         }
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
     </style>
+
+    <!-- Supabase JS client -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
-
 <body>
-
     <div class="card">
-
         <h1>Chat App</h1>
-
         <label for="username">Username</label>
-
         <input
             type="text"
             id="username"
             placeholder="Enter your username"
             maxlength="20"
         >
-
         <div id="error" class="error"></div>
-
         <label for="color">Display Color (optional)</label>
-
         <input
             type="text"
             id="color"
             placeholder="#e63946"
         >
-
         <button id="joinButton">Join Chat</button>
-
     </div>
 
     <script>
-       
-        const savedUsername = localStorage.getItem('username');
+        // ---- Supabase config ----
+        // Get these from Supabase dashboard: Settings > API
+         const SUPABASE_URL = "https://kshsvmaklwzxnbkpkmmt.supabase.co/rest/v1/";
+         const SUPABASE_ANON_KEY = "sb_publishable_rEp_QZbrgyKNMtDqviH2nA_KsMRBW6Z";
 
-        if (savedUsername) {
-            window.location.href = 'index.html';
-        }
+        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
         const usernameInput = document.getElementById('username');
         const colorInput = document.getElementById('color');
         const errorMessage = document.getElementById('error');
         const joinButton = document.getElementById('joinButton');
 
-         joinButton.addEventListener('click', function () {
+        // If a Supabase session already exists AND it already has a username
+        // attached, skip login and go straight to chat.
+        (async function checkExistingSession() {
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            if (session && session.user?.user_metadata?.username) {
+                window.location.href = 'index.html';
+            }
+        })();
 
-            
+        joinButton.addEventListener('click', async function () {
             const username = usernameInput.value.trim();
             const color = colorInput.value.trim();
 
@@ -155,18 +131,39 @@
                 return;
             }
             if (username.length > 20) {
-                errorMessage.textContent =
-                    'Username cannot be more than 20 characters.';
+                errorMessage.textContent = 'Username cannot be more than 20 characters.';
                 return;
             }
 
-            localStorage.setItem('username', username);
+            joinButton.disabled = true;
+            joinButton.textContent = 'Joining...';
 
-            localStorage.setItem('chatColor', color);
+            try {
+                // Reuse an existing anonymous session if one is already open,
+                // otherwise create a new one. This is a REAL Supabase-issued
+                // session (JWT), not a string we made up ourselves.
+                let { data: { session } } = await supabaseClient.auth.getSession();
 
-            window.location.href = 'index.html';
+                if (!session) {
+                    const { data, error } = await supabaseClient.auth.signInAnonymously();
+                    if (error) throw error;
+                    session = data.session;
+                }
+
+                // Attach the chosen username/color to this Supabase user.
+                // Supabase stores this as user_metadata on the auth.users row.
+                const { error: updateError } = await supabaseClient.auth.updateUser({
+                    data: { username, color }
+                });
+                if (updateError) throw updateError;
+
+                window.location.href = 'index.html';
+            } catch (err) {
+                errorMessage.textContent = 'Could not join: ' + err.message;
+                joinButton.disabled = false;
+                joinButton.textContent = 'Join Chat';
+            }
         });
     </script>
-
 </body>
 </html>
